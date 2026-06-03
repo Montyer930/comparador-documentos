@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comparador de Documentos</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Comparador de Documentos</h1>
+      <p>Sube dos PDFs para comparar su contenido y analizar diferencias con IA</p>
+    </header>
+
+    <section class="upload-section">
+      <div class="upload-box">
+        <label class="upload-label">
+          <span>Documento A</span>
+          <input type="file" id="fileA" accept=".pdf" />
+          <div class="drop-zone" id="dropZoneA">
+            <span class="drop-text">Arrastra o selecciona el PDF</span>
+          </div>
+        </label>
+        <span class="file-name" id="fileNameA"></span>
+      </div>
+
+      <div class="upload-box">
+        <label class="upload-label">
+          <span>Documento B</span>
+          <input type="file" id="fileB" accept=".pdf" />
+          <div class="drop-zone" id="dropZoneB">
+            <span class="drop-text">Arrastra o selecciona el PDF</span>
+          </div>
+        </label>
+        <span class="file-name" id="fileNameB"></span>
+      </div>
+
+      <button id="compareBtn" disabled>Comparar documentos</button>
+    </section>
+
+    <section id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p>Comparando documentos y analizando con IA...</p>
+    </section>
+
+    <section id="results" class="hidden">
+      <div class="summary-bar" id="summaryBar"></div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="diff">Diferencias</button>
+        <button class="tab" data-tab="tables">Tablas</button>
+        <button class="tab" data-tab="ia">Análisis IA</button>
+      </div>
+
+      <div id="tabDiff" class="tab-content active">
+        <div class="diff-container">
+          <div class="diff-panel">
+            <h3>Documento A</h3>
+            <pre id="diffA"></pre>
+          </div>
+          <div class="diff-panel">
+            <h3>Documento B</h3>
+            <pre id="diffB"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div id="tabTables" class="tab-content">
+        <div id="tablesContainer"></div>
+      </div>
+
+      <div id="tabIA" class="tab-content">
+        <div id="iaContainer" class="ia-container"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
