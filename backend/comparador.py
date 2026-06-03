@@ -1,4 +1,5 @@
 import difflib
+import re
 from typing import Any
 
 
@@ -87,6 +88,48 @@ def compare_tables(
     return table_diffs
 
 
+def _normalize(s: str) -> str:
+    return re.sub(r"\s+", " ", s).lower().strip()
+
+
+def compare_items(
+    items_a: list[dict[str, str]],
+    items_b: list[dict[str, str]],
+) -> dict[str, list | int]:
+    idx_a: dict[str, dict[str, str]] = {i["codigo"]: i for i in items_a}
+    idx_b: dict[str, dict[str, str]] = {i["codigo"]: i for i in items_b}
+
+    all_codes = set(idx_a) | set(idx_b)
+    both: set[str] = set(idx_a) & set(idx_b)
+    only_a = set(idx_a) - set(idx_b)
+    only_b = set(idx_b) - set(idx_a)
+
+    rows: list[dict] = []
+    for code in sorted(all_codes):
+        a = idx_a.get(code)
+        b = idx_b.get(code)
+        name_match = None
+        if a and b:
+            name_match = _normalize(a["nombre"]) == _normalize(b["nombre"])
+        rows.append({
+            "codigo": code,
+            "nombre_a": a["nombre"] if a else None,
+            "nombre_b": b["nombre"] if b else None,
+            "en_a": a is not None,
+            "en_b": b is not None,
+            "nombre_coincide": name_match,
+        })
+
+    return {
+        "total_a": len(items_a),
+        "total_b": len(items_b),
+        "en_ambos": len(both),
+        "solo_a": len(only_a),
+        "solo_b": len(only_b),
+        "rows": rows,
+    }
+
+
 def compare_all(
     doc_a: dict[str, object],
     doc_b: dict[str, object],
@@ -99,7 +142,12 @@ def compare_all(
         list(doc_a.get("tables", [])),
         list(doc_b.get("tables", [])),
     )
+    items_result = compare_items(
+        list(doc_a.get("items", [])),
+        list(doc_b.get("items", [])),
+    )
     return {
         "text_comparison": text_result,
         "table_comparison": tables_result,
+        "items_comparison": items_result,
     }

@@ -5,50 +5,47 @@ import httpx
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "qwen2.5:7b"
-FALLBACK_MODELS = ["qwen2.5:3b", "llama3.2:3b", "llama3.1:8b"]
 
 
 def build_prompt(diff_data: dict[str, Any]) -> str:
-    text_comp = diff_data.get("text_comparison", {})
-    table_comp = diff_data.get("table_comparison", [])
+    items_comp = diff_data.get("items_comparison", {})
 
-    prompt = f"""Eres un analista de documentos. Recibes la comparación entre dos documentos PDF que deberían contener la misma información pero en formatos diferentes.
+    rows = items_comp.get("rows", [])
 
-## Similitud general: {text_comp.get('similarity_percentage', 'N/A')}%
+    prompt = f"""Eres un analista de documentos de arquitectura. Recibes la comparación entre dos listas de materiales/artículos (PDFs) que DEBERÍAN contener los mismos ítems pero pueden tener diferencias.
 
-### Diferencias textuales:
+## Resumen de la comparación:
+- Total ítems Documento A: {items_comp.get('total_a', '?')}
+- Total ítems Documento B: {items_comp.get('total_b', '?')}
+- Ítems que aparecen en AMBOS: {items_comp.get('en_ambos', '?')}
+- Ítems SOLO en A: {items_comp.get('solo_a', '?')}
+- Ítems SOLO en B: {items_comp.get('solo_b', '?')}
+
+### Ítems solo en Documento A:
 """
+    for row in rows:
+        if row.get("en_a") and not row.get("en_b"):
+            prompt += f"- {row['codigo']} -> {row['nombre_a']}\n"
 
-    blocks = text_comp.get("diff_blocks", [])
-    for block in blocks:
-        tag = block.get("tag", "")
-        if tag == "replace":
-            a = "".join(block.get("a_lines", []))
-            b = "".join(block.get("b_lines", []))
-            prompt += f"\n- REEMPLAZO (líneas {block.get('a_start')}-{block.get('a_end')} vs {block.get('b_start')}-{block.get('b_end')}):\n  Documento A: {a[:200]}\n  Documento B: {b[:200]}\n"
-        elif tag == "delete":
-            a = "".join(block.get("a_lines", []))
-            prompt += f"\n- ELIMINADO en Documento B (líneas {block.get('a_start')}-{block.get('a_end')}):\n  {a[:200]}\n"
-        elif tag == "insert":
-            b = "".join(block.get("b_lines", []))
-            prompt += f"\n- INSERTADO en Documento B (líneas {block.get('b_start')}-{block.get('b_end')}):\n  {b[:200]}\n"
+    prompt += "\n### Ítems solo en Documento B:\n"
+    for row in rows:
+        if not row.get("en_a") and row.get("en_b"):
+            prompt += f"- {row['codigo']} -> {row['nombre_b']}\n"
 
-    prompt += "\n### Diferencias en tablas:\n"
-    for tbl in table_comp:
-        if not tbl.get("match", True):
-            prompt += f"\n- Tabla índice {tbl.get('table_index')}: Documento A tiene {tbl.get('rows_a')} filas, Documento B tiene {tbl.get('rows_b')} filas\n"
-            for row in tbl.get("row_diffs", []):
-                prompt += f"  - Fila {row.get('row')}: A={row.get('a')} vs B={row.get('b')}\n"
+    prompt += "\n### Ítems en ambos pero con NOMBRE DIFERENTE (código igual, nombre distinto):\n"
+    for row in rows:
+        if row.get("en_a") and row.get("en_b") and row.get("nombre_coincide") is False:
+            prompt += f"- {row['codigo']}: A=\"{row['nombre_a']}\" vs B=\"{row['nombre_b']}\"\n"
 
-    prompt += """
----
+    prompt += """---
 Analiza y responde SOLO con un JSON con esta estructura exacta:
 {
-  "resumen": "Resumen corto de las diferencias encontradas (máx 2 oraciones)",
-  "diferencias_reales": ["lista", "de", "diferencias", "significativas"],
-  "diferencias_formato": ["lista", "de", "diferencias", "solo de formato"],
-  "coincidencia_porcentaje_estimado": 95,
-  "recomendacion": "Recomendación breve basada en el análisis"
+  "resumen": "Resumen en 1-2 oraciones del resultado de la comparación: cuántos items coinciden, cuántos faltan, etc.",
+  "items_solo_en_a": ["código1 - nombre1", "código2 - nombre2"],
+  "items_solo_en_b": ["código1 - nombre1", "código2 - nombre2"],
+  "items_nombre_diferente": ["código1: A='nombre' vs B='nombre'"],
+  "items_coincidentes": 0,
+  "recomendacion": "Recomendación breve basada en el análisis: ¿se puede considerar que los documentos son equivalentes o hay diferencias importantes que revisar?"
 }
 Responde ÚNICAMENTE el JSON, sin texto adicional.
 """
@@ -74,8 +71,9 @@ async def analyze_diff(diff_data: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         return {
             "resumen": f"No se pudo obtener análisis IA: {str(e)}",
-            "diferencias_reales": [],
-            "diferencias_formato": [],
-            "coincidencia_porcentaje_estimado": None,
+            "items_solo_en_a": [],
+            "items_solo_en_b": [],
+            "items_nombre_diferente": [],
+            "items_coincidentes": 0,
             "recomendacion": "Verifica que Ollama esté corriendo con el modelo adecuado.",
         }

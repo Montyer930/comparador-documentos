@@ -1,6 +1,9 @@
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from analizador_ia import analyze_diff
 from comparador import compare_all
 from extractor import extract_all
+from extractor_items import extract_items
 
 app = FastAPI(title="Comparador de Documentos", version="1.0.0")
 
@@ -53,6 +57,11 @@ async def compare_documents(
 
         doc_a = extract_all(path_a)
         doc_b = extract_all(path_b)
+
+        items_a = extract_items(path_a)
+        items_b = extract_items(path_b)
+        doc_a["items"] = items_a
+        doc_b["items"] = items_b
 
         diff = compare_all(doc_a, doc_b)
         ia_analysis = await analyze_diff(diff)

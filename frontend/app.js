@@ -84,6 +84,7 @@ function renderResults(data) {
   results.classList.remove("hidden");
 
   renderSummary(data);
+  renderItems(data.diff.items_comparison);
   renderDiff(data.diff.text_comparison);
   renderTables(data.diff.table_comparison);
   renderIA(data.ia_analysis);
@@ -93,8 +94,20 @@ function renderResults(data) {
 function renderSummary(data) {
   const bar = document.getElementById("summaryBar");
   const diff = data.diff.text_comparison;
+  const items = data.diff.items_comparison;
   const pct = diff.similarity_percentage;
   const pctClass = pct >= 95 ? "low" : pct >= 80 ? "medium" : "high";
+
+  let itemsHtml = "";
+  if (items) {
+    const bothPct = items.total_a > 0 ? Math.round((items.en_ambos / Math.max(items.total_a, items.total_b)) * 100) : 0;
+    const bothClass = bothPct >= 95 ? "low" : bothPct >= 80 ? "medium" : "high";
+    itemsHtml = `&nbsp;&nbsp;|&nbsp;&nbsp;
+      <strong>Items:</strong> ${items.en_ambos} coinciden
+      <span class="ia-badge ${bothClass}" style="font-size:0.85rem">${bothPct}%</span>
+      &nbsp;(${items.solo_a} solo A, ${items.solo_b} solo B)`;
+  }
+
   bar.innerHTML = `
     <strong>Similitud general:</strong>
     <span class="ia-badge ${pctClass}">${pct}%</span>
@@ -102,7 +115,93 @@ function renderSummary(data) {
     <strong>Documento A:</strong> ${diff.total_lines_a} líneas
     &nbsp;&nbsp;
     <strong>Documento B:</strong> ${diff.total_lines_b} líneas
+    ${itemsHtml}
   `;
+}
+
+function renderItems(itemsComp) {
+  const summary = document.getElementById("itemsSummary");
+  const wrapper = document.getElementById("itemsTableWrapper");
+  wrapper.innerHTML = "";
+  summary.innerHTML = "";
+
+  if (!itemsComp || !itemsComp.rows) {
+    summary.innerHTML = "<p>No se pudieron extraer items de los documentos.</p>";
+    return;
+  }
+
+  const total = itemsComp.total_a + itemsComp.total_b;
+  const eq = itemsComp.en_ambos - itemsComp.rows.filter(r => r.nombre_coincide === false).length;
+  const nameDiff = itemsComp.rows.filter(r => r.nombre_coincide === false).length;
+
+  summary.innerHTML = `
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+      <span><strong>Total items:</strong> ${itemsComp.total_a} (A) vs ${itemsComp.total_b} (B)</span>
+      <span style="color:#2e7d32"><strong>✅ En ambos:</strong> ${itemsComp.en_ambos}</span>
+      <span style="color:#c62828"><strong>❌ Solo A:</strong> ${itemsComp.solo_a}</span>
+      <span style="color:#e65100"><strong>⚠️ Solo B:</strong> ${itemsComp.solo_b}</span>
+      <span style="color:#f57c00"><strong>⚡ Nombre difiere:</strong> ${nameDiff}</span>
+    </div>
+  `;
+
+  const table = document.createElement("table");
+  table.className = "items-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Código</th>
+        <th>Nombre en A</th>
+        <th>Nombre en B</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody id="itemsTbody"></tbody>
+  `;
+  wrapper.appendChild(table);
+
+  const tbody = document.getElementById("itemsTbody");
+
+  // Sort: solo A first, then solo B, then name diff, then match
+  const sorted = [...itemsComp.rows].sort((a, b) => {
+    const score = (r) => {
+      if (r.en_a && !r.en_b) return 0;
+      if (!r.en_a && r.en_b) return 1;
+      if (r.nombre_coincide === false) return 2;
+      return 3;
+    };
+    return score(a) - score(b);
+  });
+
+  for (const row of sorted) {
+    const tr = document.createElement("tr");
+    let status = "";
+    let rowClass = "";
+
+    if (row.en_a && row.en_b) {
+      if (row.nombre_coincide === false) {
+        status = "⚠️ Difiere nombre";
+        rowClass = "row-name-diff";
+      } else {
+        status = "✅ Coincide";
+        rowClass = "row-match";
+      }
+    } else if (row.en_a && !row.en_b) {
+      status = "❌ Solo A";
+      rowClass = "row-only-a";
+    } else if (!row.en_a && row.en_b) {
+      status = "⚠️ Solo B";
+      rowClass = "row-only-b";
+    }
+
+    tr.className = rowClass;
+    tr.innerHTML = `
+      <td><strong>${row.codigo}</strong></td>
+      <td>${row.nombre_a || "<em style='color:#999'>—</em>"}</td>
+      <td>${row.nombre_b || "<em style='color:#999'>—</em>"}</td>
+      <td>${status}</td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
 
 function renderDiff(textComp) {
@@ -254,28 +353,39 @@ function renderIA(ia) {
     return;
   }
 
-  const pct = ia.coincidencia_porcentaje_estimado;
-  const pctClass = pct >= 95 ? "low" : pct >= 80 ? "medium" : "high";
+  const coincidentes = ia.items_coincidentes ?? "N/A";
 
   container.innerHTML = `
     <div class="ia-section">
-      <span class="ia-badge ${pctClass}">${pct ?? "N/A"}%</span>
-      <p>${ia.resumen || ""}</p>
+      <p style="font-size:1.1rem">${ia.resumen || ""}</p>
     </div>
 
     <div class="ia-section">
-      <h4>Diferencias Reales</h4>
-      ${ia.diferencias_reales?.length
-        ? `<ul>${ia.diferencias_reales.map((d) => `<li>${d}</li>`).join("")}</ul>`
-        : "<p>Sin diferencias significativas.</p>"
+      <h4>Ítems que coinciden</h4>
+      <p style="font-size:1.5rem;font-weight:700;color:#2e7d32">${coincidentes}</p>
+    </div>
+
+    <div class="ia-section">
+      <h4>Ítems solo en Documento A</h4>
+      ${ia.items_solo_en_a?.length
+        ? `<ul>${ia.items_solo_en_a.map((d) => `<li>${d}</li>`).join("")}</ul>`
+        : "<p style='color:#888'>No hay items exclusivos de A.</p>"
       }
     </div>
 
     <div class="ia-section">
-      <h4>Diferencias de Formato</h4>
-      ${ia.diferencias_formato?.length
-        ? `<ul>${ia.diferencias_formato.map((d) => `<li>${d}</li>`).join("")}</ul>`
-        : "<p>Sin diferencias de formato.</p>"
+      <h4>Ítems solo en Documento B</h4>
+      ${ia.items_solo_en_b?.length
+        ? `<ul>${ia.items_solo_en_b.map((d) => `<li>${d}</li>`).join("")}</ul>`
+        : "<p style='color:#888'>No hay items exclusivos de B.</p>"
+      }
+    </div>
+
+    <div class="ia-section">
+      <h4>Ítems con nombre diferente</h4>
+      ${ia.items_nombre_diferente?.length
+        ? `<ul>${ia.items_nombre_diferente.map((d) => `<li>${d}</li>`).join("")}</ul>`
+        : "<p style='color:#888'>Todos los nombres coinciden.</p>"
       }
     </div>
 

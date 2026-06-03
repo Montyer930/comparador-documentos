@@ -48,12 +48,18 @@
       <div class="summary-bar" id="summaryBar"></div>
 
       <div class="tabs">
-        <button class="tab active" data-tab="diff">Diferencias</button>
+        <button class="tab active" data-tab="items">Items</button>
+        <button class="tab" data-tab="diff">Diferencias</button>
         <button class="tab" data-tab="tables">Tablas</button>
         <button class="tab" data-tab="ia">Análisis IA</button>
       </div>
 
-      <div id="tabDiff" class="tab-content active">
+      <div id="tabItems" class="tab-content active">
+        <div class="items-summary" id="itemsSummary"></div>
+        <div class="items-table-wrapper" id="itemsTableWrapper"></div>
+      </div>
+
+      <div id="tabDiff" class="tab-content">
         <div class="diff-container">
           <div class="diff-panel">
             <h3>Documento A</h3>
