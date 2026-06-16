@@ -65,6 +65,7 @@ async def analyze_diff(diff_data: dict[str, Any]) -> dict[str, Any]:
         "model": MODEL,
         "prompt": prompt,
         "stream": False,
+        "format": "json",
     }
 
     try:
