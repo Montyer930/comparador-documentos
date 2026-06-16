@@ -6,7 +6,6 @@ from typing import Any
 def compare_texts(text_a: str, text_b: str) -> dict[str, Any]:
     lines_a = text_a.splitlines(keepends=True)
     lines_b = text_b.splitlines(keepends=True)
-
     matcher = difflib.SequenceMatcher(None, lines_a, lines_b)
 
     diff_blocks: list[dict[str, Any]] = []
@@ -24,7 +23,6 @@ def compare_texts(text_a: str, text_b: str) -> dict[str, Any]:
             "b_end": j2,
         }
         diff_blocks.append(block)
-
         if op == "equal":
             total_similar += sum(len(l) for l in lines_a[i1:i2])
         else:
@@ -43,89 +41,64 @@ def compare_texts(text_a: str, text_b: str) -> dict[str, Any]:
     }
 
 
-def compare_tables(
-    tables_a: list[list[list[str | None]]],
-    tables_b: list[list[list[str | None]]],
-) -> list[dict[str, Any]]:
-    table_diffs = []
-    max_tables = max(len(tables_a), len(tables_b))
-
-    for i in range(max_tables):
-        ta = tables_a[i] if i < len(tables_a) else []
-        tb = tables_b[i] if i < len(tables_b) else []
-
-        if not ta and not tb:
-            continue
-
-        if ta == tb:
-            table_diffs.append(
-                {"table_index": i, "match": True, "rows_a": len(ta), "rows_b": len(tb)}
-            )
-        else:
-            row_diffs = []
-            max_rows = max(len(ta), len(tb))
-            for r in range(max_rows):
-                ra = ta[r] if r < len(ta) else []
-                rb = tb[r] if r < len(tb) else []
-                if ra != rb:
-                    row_diffs.append(
-                        {
-                            "row": r,
-                            "a": ra,
-                            "b": rb,
-                        }
-                    )
-            table_diffs.append(
-                {
-                    "table_index": i,
-                    "match": False,
-                    "rows_a": len(ta),
-                    "rows_b": len(tb),
-                    "row_diffs": row_diffs,
-                }
-            )
-
-    return table_diffs
-
-
 def _normalize(s: str) -> str:
     return re.sub(r"\s+", " ", s).lower().strip()
 
 
-def compare_items(
-    items_a: list[dict[str, str]],
-    items_b: list[dict[str, str]],
-) -> dict[str, list | int]:
-    idx_a: dict[str, dict[str, str]] = {i["codigo"]: i for i in items_a}
-    idx_b: dict[str, dict[str, str]] = {i["codigo"]: i for i in items_b}
+def compare_multiple_items(
+    doc_items: list[list[dict[str, str]]],
+) -> dict[str, Any]:
+    indices: list[dict[str, dict[str, str]]] = []
+    for items in doc_items:
+        indices.append({i["codigo"]: i for i in items})
 
-    all_codes = set(idx_a) | set(idx_b)
-    both: set[str] = set(idx_a) & set(idx_b)
-    only_a = set(idx_a) - set(idx_b)
-    only_b = set(idx_b) - set(idx_a)
+    all_codes: set[str] = set()
+    for idx in indices:
+        all_codes |= set(idx)
+    code_counts: dict[str, int] = {}
+    for code in all_codes:
+        code_counts[code] = sum(1 for idx in indices if code in idx)
+
+    n = len(doc_items)
+    en_todos = sum(1 for c in code_counts.values() if c == n)
+    en_ninguno = 0
 
     rows: list[dict] = []
     for code in sorted(all_codes):
-        a = idx_a.get(code)
-        b = idx_b.get(code)
-        name_match = None
-        if a and b:
-            name_match = _normalize(a["nombre"]) == _normalize(b["nombre"])
+        presente: list[bool] = []
+        nombres: list[str | None] = []
+        for idx in indices:
+            item = idx.get(code)
+            presente.append(item is not None)
+            nombres.append(item["nombre"] if item else None)
+
+        nombre_global = None
+        nombre_coincide_en_todos: bool | None = None
+        nombres_presentes = [n for n in nombres if n is not None]
+        if nombres_presentes:
+            nombre_global = nombres_presentes[0]
+            nombre_coincide_en_todos = all(
+                _normalize(n) == _normalize(nombre_global) for n in nombres_presentes
+            )
+
         rows.append({
             "codigo": code,
-            "nombre_a": a["nombre"] if a else None,
-            "nombre_b": b["nombre"] if b else None,
-            "en_a": a is not None,
-            "en_b": b is not None,
-            "nombre_coincide": name_match,
+            "nombres": nombres,
+            "presente": presente,
+            "total_presente": sum(presente),
+            "nombre_global": nombre_global,
+            "nombre_coincide_en_todos": nombre_coincide_en_todos,
         })
 
+    total_por_doc = [len(items) for items in doc_items]
+    solo_en_uno = sum(1 for c in code_counts.values() if c == 1)
+
     return {
-        "total_a": len(items_a),
-        "total_b": len(items_b),
-        "en_ambos": len(both),
-        "solo_a": len(only_a),
-        "solo_b": len(only_b),
+        "cantidad_documentos": n,
+        "total_por_doc": total_por_doc,
+        "total_codigos_unicos": len(all_codes),
+        "en_todos": en_todos,
+        "solo_en_uno": solo_en_uno,
         "rows": rows,
     }
 
@@ -138,16 +111,11 @@ def compare_all(
         str(doc_a.get("text", "")),
         str(doc_b.get("text", "")),
     )
-    tables_result = compare_tables(
-        list(doc_a.get("tables", [])),
-        list(doc_b.get("tables", [])),
-    )
-    items_result = compare_items(
+    items_result = compare_multiple_items([
         list(doc_a.get("items", [])),
         list(doc_b.get("items", [])),
-    )
+    ])
     return {
         "text_comparison": text_result,
-        "table_comparison": tables_result,
         "items_comparison": items_result,
     }

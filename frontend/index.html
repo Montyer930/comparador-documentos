@@ -10,33 +10,16 @@
   <div class="container">
     <header>
       <h1>Comparador de Documentos</h1>
-      <p>Sube dos PDFs para comparar su contenido y analizar diferencias con IA</p>
+      <p>Sube 2 o más PDFs para comparar su contenido y analizar diferencias con IA</p>
     </header>
 
     <section class="upload-section">
-      <div class="upload-box">
-        <label class="upload-label">
-          <span>Documento A</span>
-          <input type="file" id="fileA" accept=".pdf" />
-          <div class="drop-zone" id="dropZoneA">
-            <span class="drop-text">Arrastra o selecciona el PDF</span>
-          </div>
-        </label>
-        <span class="file-name" id="fileNameA"></span>
-      </div>
+      <div id="uploadSlots" class="upload-slots"></div>
 
-      <div class="upload-box">
-        <label class="upload-label">
-          <span>Documento B</span>
-          <input type="file" id="fileB" accept=".pdf" />
-          <div class="drop-zone" id="dropZoneB">
-            <span class="drop-text">Arrastra o selecciona el PDF</span>
-          </div>
-        </label>
-        <span class="file-name" id="fileNameB"></span>
+      <div class="upload-actions">
+        <button id="addDocBtn" class="btn-secondary">+ Agregar documento</button>
+        <button id="compareBtn" class="btn-primary" disabled>Comparar documentos</button>
       </div>
-
-      <button id="compareBtn" disabled>Comparar documentos</button>
     </section>
 
     <section id="loading" class="hidden">
@@ -49,31 +32,12 @@
 
       <div class="tabs">
         <button class="tab active" data-tab="items">Items</button>
-        <button class="tab" data-tab="diff">Diferencias</button>
-        <button class="tab" data-tab="tables">Tablas</button>
         <button class="tab" data-tab="ia">Análisis IA</button>
       </div>
 
       <div id="tabItems" class="tab-content active">
         <div class="items-summary" id="itemsSummary"></div>
         <div class="items-table-wrapper" id="itemsTableWrapper"></div>
-      </div>
-
-      <div id="tabDiff" class="tab-content">
-        <div class="diff-container">
-          <div class="diff-panel">
-            <h3>Documento A</h3>
-            <pre id="diffA"></pre>
-          </div>
-          <div class="diff-panel">
-            <h3>Documento B</h3>
-            <pre id="diffB"></pre>
-          </div>
-        </div>
-      </div>
-
-      <div id="tabTables" class="tab-content">
-        <div id="tablesContainer"></div>
       </div>
 
       <div id="tabIA" class="tab-content">

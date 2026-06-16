@@ -1,4 +1,3 @@
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -10,11 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from analizador_ia import analyze_diff
-from comparador import compare_all
-from extractor import extract_all
+from comparador import compare_multiple_items, compare_texts
 from extractor_items import extract_items
 
-app = FastAPI(title="Comparador de Documentos", version="1.0.0")
+app = FastAPI(title="Comparador de Documentos", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,35 +39,42 @@ async def serve_static(filename: str):
 
 
 @app.post("/compare")
-async def compare_documents(
-    file_a: UploadFile = File(...),
-    file_b: UploadFile = File(...),
-):
+async def compare_documents(files: list[UploadFile] = File(...)):
+    if len(files) < 2:
+        return JSONResponse(
+            {"error": "Debes subir al menos 2 documentos"}, status_code=400
+        )
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        path_a = Path(tmpdir) / file_a.filename or "doc_a.pdf"
-        path_b = Path(tmpdir) / file_b.filename or "doc_b.pdf"
+        docs_raw: list[dict] = []
+        filenames: list[str] = []
 
-        content_a = await file_a.read()
-        content_b = await file_b.read()
+        for f in files:
+            content = await f.read()
+            if not content:
+                continue
+            path = Path(tmpdir) / (f.filename or "documento.pdf")
+            path.write_bytes(content)
+            items = extract_items(path)
+            docs_raw.append(items)
+            filenames.append(f.filename or "documento.pdf")
 
-        path_a.write_bytes(content_a)
-        path_b.write_bytes(content_b)
+        items_comp = compare_multiple_items(docs_raw)
 
-        doc_a = extract_all(path_a)
-        doc_b = extract_all(path_b)
+        text_comps = []
+        if len(docs_raw) == 2:
+            text_a = "\n".join(i.get("nombre", "") for i in docs_raw[0])
+            text_b = "\n".join(i.get("nombre", "") for i in docs_raw[1])
+            text_comps.append(compare_texts(text_a, text_b))
 
-        items_a = extract_items(path_a)
-        items_b = extract_items(path_b)
-        doc_a["items"] = items_a
-        doc_b["items"] = items_b
-
-        diff = compare_all(doc_a, doc_b)
-        ia_analysis = await analyze_diff(diff)
+        ia_analysis = await analyze_diff(items_comp)
 
     return {
-        "filename_a": file_a.filename or "doc_a.pdf",
-        "filename_b": file_b.filename or "doc_b.pdf",
-        "diff": diff,
+        "documentos": filenames,
+        "diff": {
+            "text_comparisons": text_comps,
+            "items_comparison": items_comp,
+        },
         "ia_analysis": ia_analysis,
     }
 

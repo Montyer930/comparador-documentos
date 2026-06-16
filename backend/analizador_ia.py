@@ -7,45 +7,51 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "qwen2.5:7b"
 
 
-def build_prompt(diff_data: dict[str, Any]) -> str:
-    items_comp = diff_data.get("items_comparison", {})
-
+def build_prompt(items_comp: dict[str, Any]) -> str:
+    n = items_comp.get("cantidad_documentos", 2)
     rows = items_comp.get("rows", [])
 
-    prompt = f"""Eres un analista de documentos de arquitectura. Recibes la comparación entre dos listas de materiales/artículos (PDFs) que DEBERÍAN contener los mismos ítems pero pueden tener diferencias.
+    prompt = f"""Eres un analista de documentos de arquitectura. Recibes la comparación entre {n} listas de materiales/artículos (PDFs) que DEBERÍAN contener los mismos ítems.
 
 ## Resumen de la comparación:
-- Total ítems Documento A: {items_comp.get('total_a', '?')}
-- Total ítems Documento B: {items_comp.get('total_b', '?')}
-- Ítems que aparecen en AMBOS: {items_comp.get('en_ambos', '?')}
-- Ítems SOLO en A: {items_comp.get('solo_a', '?')}
-- Ítems SOLO en B: {items_comp.get('solo_b', '?')}
-
-### Ítems solo en Documento A:
 """
-    for row in rows:
-        if row.get("en_a") and not row.get("en_b"):
-            prompt += f"- {row['codigo']} -> {row['nombre_a']}\n"
 
-    prompt += "\n### Ítems solo en Documento B:\n"
-    for row in rows:
-        if not row.get("en_a") and row.get("en_b"):
-            prompt += f"- {row['codigo']} -> {row['nombre_b']}\n"
+    for i, total in enumerate(items_comp.get("total_por_doc", [])):
+        prompt += f"- Documento {chr(65 + i)}: {total} ítems\n"
 
-    prompt += "\n### Ítems en ambos pero con NOMBRE DIFERENTE (código igual, nombre distinto):\n"
+    prompt += f"""- Total códigos únicos: {items_comp.get('total_codigos_unicos', '?')}
+- Ítems presentes en TODOS los documentos: {items_comp.get('en_todos', '?')}
+- Ítems presentes en SOLO UN documento: {items_comp.get('solo_en_uno', '?')}
+
+### Ítems faltantes por documento (presentes en algunos pero no en todos):
+"""
+
     for row in rows:
-        if row.get("en_a") and row.get("en_b") and row.get("nombre_coincide") is False:
-            prompt += f"- {row['codigo']}: A=\"{row['nombre_a']}\" vs B=\"{row['nombre_b']}\"\n"
+        if not all(row.get("presente", [])):
+            docs_faltantes = [
+                chr(65 + i)
+                for i, p in enumerate(row.get("presente", []))
+                if not p
+            ]
+            prompt += f"- {row['codigo']} -> falta en: {', '.join(docs_faltantes)} (nombre: {row.get('nombre_global', 'N/A')})\n"
+
+    prompt += "\n### Ítems con nombre diferente entre documentos:\n"
+    for row in rows:
+        if row.get("nombre_coincide_en_todos") is False:
+            nombres_str = "; ".join(
+                f"{chr(65+i)}={row['nombres'][i] or 'N/A'}"
+                for i in range(n)
+            )
+            prompt += f"- {row['codigo']}: {nombres_str}\n"
 
     prompt += """---
 Analiza y responde SOLO con un JSON con esta estructura exacta:
 {
-  "resumen": "Resumen en 1-2 oraciones del resultado de la comparación: cuántos items coinciden, cuántos faltan, etc.",
-  "items_solo_en_a": ["código1 - nombre1", "código2 - nombre2"],
-  "items_solo_en_b": ["código1 - nombre1", "código2 - nombre2"],
-  "items_nombre_diferente": ["código1: A='nombre' vs B='nombre'"],
-  "items_coincidentes": 0,
-  "recomendacion": "Recomendación breve basada en el análisis: ¿se puede considerar que los documentos son equivalentes o hay diferencias importantes que revisar?"
+  "resumen": "Resumen en 1-2 oraciones del resultado.",
+  "items_en_todos": 0,
+  "items_faltantes": ["código - descripción - documentos donde falta"],
+  "items_nombre_diferente": ["código - diferencias de nombre entre documentos"],
+  "recomendacion": "Recomendación breve basada en el análisis."
 }
 Responde ÚNICAMENTE el JSON, sin texto adicional.
 """
@@ -53,12 +59,12 @@ Responde ÚNICAMENTE el JSON, sin texto adicional.
 
 
 async def analyze_diff(diff_data: dict[str, Any]) -> dict[str, Any]:
-    prompt = build_prompt(diff_data)
+    items_comp = diff_data.get("items_comparison") or diff_data
+    prompt = build_prompt(items_comp)
     payload = {
         "model": MODEL,
         "prompt": prompt,
         "stream": False,
-        "format": "json",
     }
 
     try:
@@ -67,13 +73,17 @@ async def analyze_diff(diff_data: dict[str, Any]) -> dict[str, Any]:
             resp.raise_for_status()
             result = resp.json()
             raw = result.get("response", "{}")
+            # try to extract JSON from response
+            import re as re_m
+            m = re_m.search(r"\{.*\}", raw, re_m.DOTALL)
+            if m:
+                return json.loads(m.group())
             return json.loads(raw)
     except Exception as e:
         return {
             "resumen": f"No se pudo obtener análisis IA: {str(e)}",
-            "items_solo_en_a": [],
-            "items_solo_en_b": [],
+            "items_en_todos": 0,
+            "items_faltantes": [],
             "items_nombre_diferente": [],
-            "items_coincidentes": 0,
             "recomendacion": "Verifica que Ollama esté corriendo con el modelo adecuado.",
         }
