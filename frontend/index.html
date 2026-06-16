@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Comparador de Documentos</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -37,6 +38,10 @@
 
       <div id="tabItems" class="tab-content active">
         <div class="items-summary" id="itemsSummary"></div>
+        <div class="export-bar" id="exportBar" style="display:none">
+          <button class="btn-export" id="exportCsvBtn">📄 Exportar CSV</button>
+          <button class="btn-export" id="exportXlsxBtn">📊 Exportar Excel</button>
+        </div>
         <div class="items-table-wrapper" id="itemsTableWrapper"></div>
       </div>
 

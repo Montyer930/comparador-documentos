@@ -313,6 +313,29 @@ header p {
   margin-bottom: 0.3rem;
 }
 
+.export-bar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.btn-export {
+  padding: 0.4rem 1rem;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f3460;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-export:hover {
+  background: #0f3460;
+  color: #fff;
+}
+
 .ia-badge {
   display: inline-block;
   padding: 0.3rem 0.8rem;

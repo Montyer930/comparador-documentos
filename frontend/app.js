@@ -153,13 +153,115 @@ function renderSummary(data) {
   `;
 }
 
+let _exportData = null;
+
 function chr(i) {
   return String.fromCharCode(65 + i);
 }
 
+function _normalize(s) {
+  return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV() {
+  if (!_exportData) return;
+  const { itemsComp, n } = _exportData;
+  const header = ["Código"];
+  for (let i = 0; i < n; i++) header.push(`Nombre (${chr(i)})`);
+  header.push("Presente en", "Estado");
+
+  const rows = [header];
+  for (const row of itemsComp.rows) {
+    const presentes = [];
+    for (let i = 0; i < n; i++) {
+      if (row.presente[i]) presentes.push(chr(i));
+    }
+    let status = "";
+    if (row.total_presente === n) {
+      status = row.nombre_coincide_en_todos === false ? "Nombre difiere" : "En todos";
+    } else if (row.total_presente === 0) {
+      status = "En ninguno";
+    } else {
+      status = `Solo en ${presentes.join(", ")}`;
+    }
+    const line = [row.codigo];
+    for (let i = 0; i < n; i++) line.push(row.nombres[i] || "");
+    line.push(presentes.join(", ") || "—", status);
+    rows.push(line);
+  }
+
+  const csv = rows
+    .map((r) =>
+      r
+        .map((v) => {
+          const s = String(v);
+          return s.includes(",") || s.includes('"') || s.includes("\n")
+            ? `"${s.replace(/"/g, '""')}"`
+            : s;
+        })
+        .join(",")
+    )
+    .join("\n");
+
+  downloadBlob("\uFEFF" + csv, "comparacion_items.csv", "text/csv;charset=utf-8");
+}
+
+function exportXLSX() {
+  if (!_exportData) return;
+  if (typeof XLSX === "undefined") {
+    alert("La librería para Excel no está disponible. Usa la exportación CSV en su lugar.");
+    return;
+  }
+  const { itemsComp, n } = _exportData;
+  const header = ["Código"];
+  for (let i = 0; i < n; i++) header.push(`Nombre (${chr(i)})`);
+  header.push("Presente en", "Estado");
+
+  const data = [header];
+  for (const row of itemsComp.rows) {
+    const presentes = [];
+    for (let i = 0; i < n; i++) {
+      if (row.presente[i]) presentes.push(chr(i));
+    }
+    let status = "";
+    if (row.total_presente === n) {
+      status = row.nombre_coincide_en_todos === false ? "Nombre difiere" : "En todos";
+    } else if (row.total_presente === 0) {
+      status = "En ninguno";
+    } else {
+      status = `Solo en ${presentes.join(", ")}`;
+    }
+    const line = [row.codigo];
+    for (let i = 0; i < n; i++) line.push(row.nombres[i] || "");
+    line.push(presentes.join(", ") || "—", status);
+    data.push(line);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, "Items");
+  XLSX.writeFile(wb, "comparacion_items.xlsx");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("exportCsvBtn").addEventListener("click", exportCSV);
+  document.getElementById("exportXlsxBtn").addEventListener("click", exportXLSX);
+});
+
 function renderItems(itemsComp) {
   const summary = document.getElementById("itemsSummary");
   const wrapper = document.getElementById("itemsTableWrapper");
+  const exportBar = document.getElementById("exportBar");
   wrapper.innerHTML = "";
   summary.innerHTML = "";
 
@@ -169,6 +271,8 @@ function renderItems(itemsComp) {
   }
 
   const n = itemsComp.cantidad_documentos;
+  _exportData = { itemsComp, n };
+  exportBar.style.display = "flex";
   const nameDiffs = itemsComp.rows.filter((r) => r.nombre_coincide_en_todos === false).length;
 
   summary.innerHTML = `
@@ -256,10 +360,6 @@ function renderItems(itemsComp) {
     `;
     tbody.appendChild(tr);
   }
-}
-
-function _normalize(s) {
-  return (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function renderIA(ia) {
